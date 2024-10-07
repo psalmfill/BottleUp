@@ -11,25 +11,25 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract BottleUp is Ownable {
     // Enum representing the status of a bottle submission
     enum BottleStatus {
-        Pending,    // Submission is pending verification
-        Collected,  // Submission has been verified and collected
-        Rewarded    // Tokens have been rewarded for this submission
+        Pending, // Submission is pending verification
+        Collected, // Submission has been verified and collected
+        Rewarded // Tokens have been rewarded for this submission
     }
 
     // Structure representing a user profile
     struct UserProfile {
-        address userAddress;              // Address of the user
-        string username;                  // Username of the user
-        uint256 totalBottlesSubmitted;    // Total number of bottles submitted by the user
-        uint256 totalBottlesCollected;     // Total number of bottles collected
-        uint256 totalBottlesRewarded;      // Total number of bottles rewarded with tokens
-        uint256 tokenBalance;              // User's balance of reward tokens
+        address userAddress; // Address of the user
+        string username; // Username of the user
+        uint256 totalBottlesSubmitted; // Total number of bottles submitted by the user
+        uint256 totalBottlesCollected; // Total number of bottles collected
+        uint256 totalBottlesRewarded; // Total number of bottles rewarded with tokens
+        uint256 tokenBalance; // User's balance of reward tokens
     }
 
     // Structure representing a bottle submission
     struct BottleSubmission {
-        uint256 bottleCount;               // Number of bottles submitted in this submission
-        BottleStatus status;               // Current status of the submission
+        uint256 bottleCount; // Number of bottles submitted in this submission
+        BottleStatus status; // Current status of the submission
     }
 
     // Mapping of user addresses to their profiles
@@ -123,38 +123,58 @@ contract BottleUp is Ownable {
     /// @notice Admin marks bottles as collected for a user
     /// @param user Address of the user whose bottles are being collected
     /// @param submissionIndex Index of the submission being collected
-    function collectBottles(address user, uint256 submissionIndex) public onlyAdmin {
+    function collectBottles(
+        address user,
+        uint256 submissionIndex
+    ) public onlyAdmin {
         require(isRegistered[user], "User not registered");
-        require(submissionIndex < userSubmissions[user].length, "Invalid submission index");
-        require(userSubmissions[user][submissionIndex].status == BottleStatus.Pending, "Bottles already collected");
+        require(
+            submissionIndex < userSubmissions[user].length,
+            "Invalid submission index"
+        );
+        BottleSubmission storage bottleSubmission = userSubmissions[user][
+            submissionIndex
+        ];
+
+        require(
+            bottleSubmission.status == BottleStatus.Pending,
+            "Bottles already collected"
+        );
 
         // Update submission status to Collected
-        userSubmissions[user][submissionIndex].status = BottleStatus.Collected;
+        bottleSubmission.status = BottleStatus.Collected;
 
         // Update user's total collected bottles
-        users[user].totalBottlesCollected += userSubmissions[user][submissionIndex].bottleCount;
+        users[user].totalBottlesCollected += bottleSubmission.bottleCount;
     }
 
     /// @notice Redeems tokens based on collected bottles
     function redeemTokens() public {
         require(isRegistered[msg.sender], "User not registered");
+        UserProfile storage userProfile = users[msg.sender];
 
-        uint256 totalCollectedBottles = users[msg.sender].totalBottlesCollected - users[msg.sender].totalBottlesRewarded;
-        require(totalCollectedBottles >= BOTTLES_PER_TOKEN, "Not enough collected bottles to redeem tokens");
+        uint256 totalCollectedBottles = userProfile.totalBottlesCollected -
+            userProfile.totalBottlesRewarded;
+        require(
+            totalCollectedBottles >= BOTTLES_PER_TOKEN,
+            "Not enough collected bottles to redeem tokens"
+        );
 
         // Calculate the number of tokens to redeem
         uint256 tokensToRedeem = totalCollectedBottles / BOTTLES_PER_TOKEN;
 
         // Update user's profile
-        users[msg.sender].totalBottlesRewarded += tokensToRedeem * BOTTLES_PER_TOKEN;
-        users[msg.sender].tokenBalance += tokensToRedeem;
+        userProfile.totalBottlesRewarded += tokensToRedeem * BOTTLES_PER_TOKEN;
+        userProfile.tokenBalance += tokensToRedeem;
 
         // Transfer reward tokens to the user
         rewardToken.transfer(msg.sender, tokensToRedeem * (10 ** 18)); // Assuming 18 decimals
 
         // Update status of rewarded submissions
         for (uint256 i = 0; i < userSubmissions[msg.sender].length; i++) {
-            if (userSubmissions[msg.sender][i].status == BottleStatus.Collected) {
+            if (
+                userSubmissions[msg.sender][i].status == BottleStatus.Collected
+            ) {
                 userSubmissions[msg.sender][i].status = BottleStatus.Rewarded;
             }
         }
@@ -163,7 +183,10 @@ contract BottleUp is Ownable {
     /// @notice Allows admins to withdraw reward tokens from the contract
     /// @param amount The amount of tokens to withdraw
     function withdrawRewardTokens(uint256 amount) external onlyAdmin {
-        require(rewardToken.balanceOf(address(this)) >= amount, "Insufficient reward tokens in contract");
+        require(
+            rewardToken.balanceOf(address(this)) >= amount,
+            "Insufficient reward tokens in contract"
+        );
         rewardToken.transfer(msg.sender, amount);
     }
 
@@ -177,19 +200,23 @@ contract BottleUp is Ownable {
     /// @notice Retrieves all bottle submissions for a user
     /// @param user Address of the user
     /// @return An array of BottleSubmission objects
-    function getUserSubmissions(address user) public view returns (BottleSubmission[] memory) {
+    function getUserSubmissions(
+        address user
+    ) public view returns (BottleSubmission[] memory) {
         return userSubmissions[user];
     }
 
     /// @notice Retrieves the top users by bottles collected for a leaderboard
     /// @param count The number of top users to retrieve
     /// @return An array of UserProfile objects representing the top users
-    function getTopUsers(uint256 count) public view returns (UserProfile[] memory) {
+    function getTopUsers(
+        uint256 count
+    ) public view returns (UserProfile[] memory) {
         require(count > 0 && count <= userList.length, "Invalid count");
 
         // Create a local array of user addresses for sorting purposes
         address[] memory sortedUsers = new address[](userList.length);
-        for (uint256 i = 0; i < userList.length; i++) {
+        for (uint256 i; i < userList.length; i++) {
             sortedUsers[i] = userList[i];
         }
 
@@ -197,9 +224,12 @@ contract BottleUp is Ownable {
         UserProfile[] memory topUsers = new UserProfile[](count);
 
         // Sort users based on totalBottlesCollected (simple selection sort on local array)
-        for (uint256 i = 0; i < sortedUsers.length; i++) {
+        for (uint256 i; i < sortedUsers.length; i++) {
             for (uint256 j = i + 1; j < sortedUsers.length; j++) {
-                if (users[sortedUsers[j]].totalBottlesCollected > users[sortedUsers[i]].totalBottlesCollected) {
+                if (
+                    users[sortedUsers[j]].totalBottlesCollected >
+                    users[sortedUsers[i]].totalBottlesCollected
+                ) {
                     address temp = sortedUsers[i];
                     sortedUsers[i] = sortedUsers[j];
                     sortedUsers[j] = temp;
